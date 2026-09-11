@@ -142,6 +142,10 @@ function App() {
         // Register flow
         const { publicKeyJwk, privateKeyJwk } = await generateKeyPair();
         
+        // BUGFIX: Save private key locally BEFORE creating the user, 
+        // to prevent Firebase's rapid auto-login from checking before it's saved!
+        localStorage.setItem(`privkey_${authUsername.toLowerCase()}`, JSON.stringify(privateKeyJwk));
+
         const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, authPassword);
         const user = userCredential.user;
 
@@ -150,9 +154,6 @@ function App() {
           username: authUsername,
           public_key: publicKeyJwk
         });
-
-        // Save private key locally ONLY
-        localStorage.setItem(`privkey_${authUsername.toLowerCase()}`, JSON.stringify(privateKeyJwk));
       }
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') setAuthError('Username already taken.');
