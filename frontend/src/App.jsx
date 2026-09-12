@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, User, Lock, Loader2, LogOut, Search, Trash2, Paperclip, Settings, File, Image as ImageIcon, Video, Mic, Square, Zap, Shield, AlertTriangle } from 'lucide-react';
+import { MessageSquare, Send, User, Lock, Loader2, LogOut, Search, Trash2, Paperclip, Settings, File, Image as ImageIcon, Video, Mic, Square, Zap, Shield } from 'lucide-react';
 import { generateKeyPair, encryptMessage, decryptMessage, encryptFile, decryptFile } from './crypto';
 import { auth, db } from './firebase';
 import { 
@@ -148,28 +148,48 @@ function App() {
   // Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const username = user.email.split('@')[0];
-        const privKey = JSON.parse(localStorage.getItem(`privkey_${username}`));
-        
-        let profile = { username };
-        try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) profile = userDoc.data();
-          else if (username !== 'kartikane') {
-             profile.banned = true;
+      try {
+        if (user) {
+          const username = user.email.split('@')[0];
+          
+          let privKey = null;
+          try {
+            privKey = JSON.parse(localStorage.getItem(`privkey_${username}`));
+          } catch(e) {
+            console.error("Failed to parse private key");
           }
-        } catch (e) {}
+          
+          let profile = { username };
+          try {
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) {
+              profile = userDoc.data();
+            } else if (username !== 'kartikane') {
+               profile.banned = true;
+            }
+          } catch (e) {
+            console.error("Failed to load profile", e);
+          }
 
-        setCurrentUser({ uid: user.uid, ...profile });
-        setSessionKeys(privKey ? { privateKeyJwk: privKey } : null);
+          setCurrentUser({ uid: user.uid, ...profile });
+          setSessionKeys(privKey ? { privateKeyJwk: privKey } : null);
 
-        const savedContacts = JSON.parse(localStorage.getItem(`contacts_${username}`));
-        setUsers(Array.isArray(savedContacts) ? savedContacts : []);
-      } else {
-        setCurrentUser(null); setSessionKeys(null); setUsers([]); setActiveChat(null); setShowAdmin(false);
+          let savedContacts = [];
+          try {
+            const parsed = JSON.parse(localStorage.getItem(`contacts_${username}`));
+            if (Array.isArray(parsed)) savedContacts = parsed;
+          } catch (e) {
+            console.error("Failed to parse contacts");
+          }
+          setUsers(savedContacts);
+        } else {
+          setCurrentUser(null); setSessionKeys(null); setUsers([]); setActiveChat(null); setShowAdmin(false);
+        }
+      } catch (err) {
+        console.error("Auth state error", err);
+      } finally {
+        setInitialLoad(false);
       }
-      setInitialLoad(false);
     });
     return () => unsubscribe();
   }, []);
@@ -199,16 +219,18 @@ function App() {
        let updated = false;
        for (const uid of chatPartners) {
           if (!currentList.find(u => u.uid === uid)) {
-             const snap = await getDoc(doc(db, "users", uid));
-             if (snap.exists()) {
-                currentList.push({ uid, ...snap.data() });
-                updated = true;
-             }
+             try {
+                const snap = await getDoc(doc(db, "users", uid));
+                if (snap.exists()) {
+                   currentList.push({ uid, ...snap.data() });
+                   updated = true;
+                }
+             } catch (e) {}
           }
        }
        if (updated) {
           setUsers(currentList);
-          localStorage.setItem(`contacts_${currentUser.username}`, JSON.stringify(currentList));
+          try { localStorage.setItem(`contacts_${currentUser.username}`, JSON.stringify(currentList)); } catch(e){}
        }
     };
     loadPartners();
@@ -227,7 +249,6 @@ function App() {
           });
           if (data.avatar !== activeChat.avatar) setActiveChat(prev => ({...prev, avatar: data.avatar}));
        } else {
-          // They were banned and deleted from the DB
           setActiveChat(prev => ({...prev, username: "[Deleted User]", banned: true}));
        }
     });
@@ -333,7 +354,7 @@ function App() {
         if (!users.find(u => u.uid === foundUser.uid)) {
           const updatedUsers = [foundUser, ...users];
           setUsers(updatedUsers);
-          localStorage.setItem(`contacts_${currentUser.username}`, JSON.stringify(updatedUsers));
+          try { localStorage.setItem(`contacts_${currentUser.username}`, JSON.stringify(updatedUsers)); } catch(e){}
         }
         setActiveChat(foundUser);
         setSearchQuery('');
@@ -441,7 +462,6 @@ function App() {
     if (targetUser.uid === currentUser.uid) { alert("You cannot ban yourself."); return; }
     if (!window.confirm(`Are you sure you want to PERMANENTLY BAN and delete the profile of ${targetUser.username}?`)) return;
     try {
-       // Delete their user document. This effectively prevents them from logging in, destroys their public key, and prevents anyone from messaging them.
        await deleteDoc(doc(db, "users", targetUser.uid));
        setAllNetworkUsers(prev => prev.filter(u => u.uid !== targetUser.uid));
        alert(`User ${targetUser.username} has been permanently eradicated from the network.`);
@@ -526,7 +546,7 @@ function App() {
                   </div>
                   {u.uid !== currentUser.uid && (
                     <button onClick={() => handleBanUser(u)} className="flex items-center gap-1 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/30 text-red-400 rounded-lg text-xs font-bold transition-colors uppercase tracking-wider">
-                      <AlertTriangle size={14} /> Ban User
+                      <Trash2 size={14} /> Ban User
                     </button>
                   )}
                   {u.uid === currentUser.uid && <span className="text-xs text-violet-400 font-bold uppercase tracking-wider px-3">Admin</span>}
