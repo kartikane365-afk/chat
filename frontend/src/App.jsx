@@ -108,6 +108,7 @@ function App() {
   const [authUsername, setAuthUsername] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
   
   const [initialLoad, setInitialLoad] = useState(true);
   const [uploadingFile, setUploadingFile] = useState(false);
