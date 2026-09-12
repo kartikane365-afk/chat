@@ -157,17 +157,15 @@ function App() {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) profile = userDoc.data();
           else if (username !== 'kartikane') {
-             // If user doc doesn't exist, they were banned! Log them out.
-             signOut(auth);
-             return;
+             profile.banned = true;
           }
         } catch (e) {}
 
         setCurrentUser({ uid: user.uid, ...profile });
         setSessionKeys(privKey ? { privateKeyJwk: privKey } : null);
 
-        const savedContacts = JSON.parse(localStorage.getItem(`contacts_${username}`)) || [];
-        setUsers(savedContacts);
+        const savedContacts = JSON.parse(localStorage.getItem(`contacts_${username}`));
+        setUsers(Array.isArray(savedContacts) ? savedContacts : []);
       } else {
         setCurrentUser(null); setSessionKeys(null); setUsers([]); setActiveChat(null); setShowAdmin(false);
       }
