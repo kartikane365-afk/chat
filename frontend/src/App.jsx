@@ -199,8 +199,11 @@ function App() {
   useEffect(() => {
     if (!currentUser) return;
     const updatePresence = () => updateDoc(doc(db, "users", currentUser.uid), { lastSeen: Date.now() }).catch(()=>null);
+    const setOffline = () => updateDoc(doc(db, "users", currentUser.uid), { lastSeen: 0 }).catch(()=>null);
+    
     updatePresence();
-    const heartbeat = setInterval(updatePresence, 60000);
+    const heartbeat = setInterval(updatePresence, 30000);
+    window.addEventListener('beforeunload', setOffline);
 
     const unsubSelf = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
        if (docSnap.exists()) {
@@ -209,7 +212,11 @@ function App() {
        }
     });
 
-    return () => { clearInterval(heartbeat); unsubSelf(); };
+    return () => { 
+      clearInterval(heartbeat); 
+      window.removeEventListener('beforeunload', setOffline);
+      unsubSelf(); 
+    };
   }, [currentUser?.uid]);
 
   // Fetch missing partners
@@ -246,7 +253,7 @@ function App() {
           const data = docSnap.data();
           setPartnerStatus({
              typing: data.typingTo === currentUser.uid,
-             online: data.lastSeen && (Date.now() - data.lastSeen < 120000)
+             online: data.lastSeen && (Date.now() - data.lastSeen < 45000)
           });
           if (data.avatar !== activeChat.avatar) setActiveChat(prev => ({...prev, avatar: data.avatar}));
        } else {
@@ -347,11 +354,12 @@ function App() {
     if (searchQuery.toLowerCase() === currentUser.username.toLowerCase()) { alert("You cannot chat with yourself!"); setSearchQuery(''); return; }
     setIsSearching(true);
     try {
-      const q = query(collection(db, "users"), where("username", "==", searchQuery.trim()));
-      const querySnapshot = await getDocs(q);
-      if (querySnapshot.empty) alert("No user found with that exact username!");
+      const querySnapshot = await getDocs(collection(db, "users"));
+      const foundDoc = querySnapshot.docs.find(d => d.data().username.toLowerCase() === searchQuery.trim().toLowerCase());
+      
+      if (!foundDoc) alert("No user found with that username!");
       else {
-        const foundUser = { uid: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+        const foundUser = { uid: foundDoc.id, ...foundDoc.data() };
         if (!users.find(u => u.uid === foundUser.uid)) {
           const updatedUsers = [foundUser, ...users];
           setUsers(updatedUsers);
@@ -654,6 +662,9 @@ function App() {
               </div>
               
               <div className="flex items-center gap-3">
+                <button onClick={() => alert('Video calling WebRTC engine will be added in Phase 5!')} className="p-2 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10 rounded-full transition-colors mr-2">
+                  <Video size={20} />
+                </button>
                 <div className="relative hidden md:block">
                   <Search className="absolute left-3 top-2.5 text-neutral-500" size={14} />
                   <input type="text" placeholder="Search..." className="pl-9 pr-4 py-2 bg-neutral-950/50 border border-white/5 text-white rounded-full text-sm outline-none placeholder-neutral-500 w-48 focus:ring-1 focus:ring-violet-500/50 transition-all" value={chatSearchQuery} onChange={e => setChatSearchQuery(e.target.value)} />
@@ -696,12 +707,15 @@ function App() {
 
             <div className="p-4 bg-transparent absolute bottom-0 w-full bg-gradient-to-t from-neutral-950 via-neutral-950/80 to-transparent pt-10">
               <div className="flex gap-2 items-center max-w-4xl mx-auto bg-neutral-900/90 backdrop-blur-xl border border-white/10 p-2 rounded-full shadow-2xl">
-                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*,audio/*" />
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingFile || isRecording || activeChat.banned} className="p-2.5 text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-colors disabled:opacity-50">
-                  {uploadingFile ? <Loader2 className="animate-spin" size={22} /> : <Paperclip size={22} />}
-                </button>
-
-                <input type="text" value={newMessage} onChange={(e) => setNewMessage(e.target.value)} disabled={activeChat.banned} placeholder={activeChat.banned ? "Cannot message a banned user." : "Message..."} className="flex-1 bg-transparent text-white placeholder-neutral-500 focus:outline-none px-2 disabled:opacity-50" />
+                <input 
+                  type="text" 
+                  value={newMessage} 
+                  onChange={(e) => setNewMessage(e.target.value)} 
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                  disabled={activeChat.banned} 
+                  placeholder={activeChat.banned ? "Cannot message a banned user." : "Message..."} 
+                  className="flex-1 bg-transparent text-white placeholder-neutral-500 focus:outline-none px-4 py-2 disabled:opacity-50" 
+                />
                 
                 {newMessage.trim() ? (
                   <button onClick={handleSendMessage} disabled={activeChat.banned} className="bg-violet-600 text-white rounded-full p-2.5 hover:bg-violet-500 transition-colors shadow-lg shadow-violet-500/20 disabled:opacity-50">
