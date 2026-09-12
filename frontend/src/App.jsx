@@ -610,11 +610,11 @@ function App() {
         </div>
 
         <div className="px-4 pb-4">
-          <div className="relative">
+          <form onSubmit={handleSearchUser} className="relative">
             <input type="text" placeholder="Find users..." className="w-full bg-neutral-950/50 border border-white/5 text-white rounded-2xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500/50 placeholder-neutral-500 transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             <Search className="absolute left-4 top-3.5 text-neutral-500" size={16} />
-            <button onClick={handleSearchUser} className="hidden">Search</button>
-          </div>
+            <button type="submit" className="hidden">Search</button>
+          </form>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 space-y-1">
