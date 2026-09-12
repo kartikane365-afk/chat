@@ -63,6 +63,54 @@ export async function decryptMessage(encryptedBase64, privateKeyJwk) {
     return new TextDecoder().decode(decryptedBuffer);
   } catch (err) {
     console.error("Decryption failed", err);
-    return "[Encrypted Message - Decryption Failed]";
+    throw err;
   }
+}
+
+// --- FILE ENCRYPTION (E2EE Media) ---
+
+export async function encryptFile(file) {
+  // Generate a random 256-bit AES key
+  const aesKey = await window.crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
+  );
+  // Initialization vector
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const fileBuffer = await file.arrayBuffer();
+  
+  // Encrypt the file binary data
+  const encryptedBuffer = await window.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: iv }, aesKey, fileBuffer
+  );
+  
+  const exportedKey = await window.crypto.subtle.exportKey("raw", aesKey);
+  
+  // Pack the IV and Key together so we can send it in the text message
+  const keyAndIv = new Uint8Array(exportedKey.byteLength + iv.byteLength);
+  keyAndIv.set(new Uint8Array(exportedKey), 0);
+  keyAndIv.set(iv, exportedKey.byteLength);
+  const keyBase64 = btoa(String.fromCharCode(...keyAndIv));
+
+  return { 
+    encryptedBlob: new Blob([encryptedBuffer], {type: file.type}), 
+    keyBase64 
+  };
+}
+
+export async function decryptFile(encryptedBlob, keyBase64, mimeType) {
+  const keyAndIv = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
+  const rawKey = keyAndIv.slice(0, 32);
+  const iv = keyAndIv.slice(32);
+
+  const aesKey = await window.crypto.subtle.importKey(
+    "raw", rawKey, { name: "AES-GCM" }, false, ["decrypt"]
+  );
+
+  const encryptedBuffer = await encryptedBlob.arrayBuffer();
+  
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: iv }, aesKey, encryptedBuffer
+  );
+
+  return new Blob([decryptedBuffer], { type: mimeType });
 }
